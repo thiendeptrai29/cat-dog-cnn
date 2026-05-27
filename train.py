@@ -1,68 +1,145 @@
+from pathlib import Path
+import argparse
+
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D
-from tensorflow.keras.layers import Flatten, Dense
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers
 
-# Dataset path
-train_dir = "dataset/train"
 
-# Tiền xử lý dữ liệu
-train_datagen = ImageDataGenerator(
-    rescale=1./255,
-    validation_split=0.2
-)
+DATA_DIR = Path("dataset/train")
+IMG_SIZE = (160, 160)
+BATCH_SIZE = 32
+SEED = 29
+MODEL_PATH = "cat_dog_model.h5"
 
-# Train data
-train_generator = train_datagen.flow_from_directory(
-    train_dir,
-    target_size=(150,150),
-    batch_size=32,
-    class_mode='binary',
-    subset='training'
-)
 
-# Validation data
-val_generator = train_datagen.flow_from_directory(
-    train_dir,
-    target_size=(150,150),
-    batch_size=32,
-    class_mode='binary',
-    subset='validation'
-)
+def make_dataset(subset):
+    return tf.keras.utils.image_dataset_from_directory(
+        DATA_DIR,
+        validation_split=0.2,
+        subset=subset,
+        seed=SEED,
+        image_size=IMG_SIZE,
+        batch_size=BATCH_SIZE,
+        label_mode="binary",
+    )
 
-# CNN Model
-model = Sequential()
 
-model.add(Conv2D(32,(3,3),activation='relu',input_shape=(150,150,3)))
-model.add(MaxPooling2D(pool_size=(2,2)))
+def prepare_dataset(dataset, training=False):
+    if training:
+        dataset = dataset.shuffle(1024, seed=SEED)
 
-model.add(Conv2D(64,(3,3),activation='relu'))
-model.add(MaxPooling2D(pool_size=(2,2)))
+    dataset = dataset.map(
+        lambda images, labels: (tf.cast(images, tf.float32) / 255.0, labels),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+    return dataset.prefetch(tf.data.AUTOTUNE)
 
-model.add(Conv2D(128,(3,3),activation='relu'))
-model.add(MaxPooling2D(pool_size=(2,2)))
 
-model.add(Flatten())
+def build_model():
+    data_augmentation = tf.keras.Sequential(
+        [
+            layers.RandomFlip("horizontal"),
+            layers.RandomRotation(0.08),
+            layers.RandomZoom(0.12),
+            layers.RandomContrast(0.12),
+        ],
+        name="augmentation",
+    )
 
-model.add(Dense(128,activation='relu'))
-model.add(Dense(1,activation='sigmoid'))
+    base_model = tf.keras.applications.MobileNetV2(
+        input_shape=IMG_SIZE + (3,),
+        include_top=False,
+        weights="imagenet",
+    )
+    base_model.trainable = False
 
-# Compile
-model.compile(
-    optimizer='adam',
-    loss='binary_crossentropy',
-    metrics=['accuracy']
-)
+    inputs = layers.Input(shape=IMG_SIZE + (3,))
+    x = data_augmentation(inputs)
+    # app.py already converts images to 0..1, so keep the saved model compatible.
+    x = layers.Rescaling(2.0, offset=-1.0)(x)
+    x = base_model(x, training=False)
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dropout(0.25)(x)
+    outputs = layers.Dense(1, activation="sigmoid")(x)
 
-# Train model
-model.fit(
-    train_generator,
-    validation_data=val_generator,
-    epochs=5
-)
+    model = tf.keras.Model(inputs, outputs)
+    return model, base_model
 
-# Save model
-model.save("cat_dog_model.h5")
 
-print("✅ Model saved!")
+def compile_model(model, learning_rate):
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="binary_crossentropy",
+        metrics=["accuracy"],
+    )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a cat/dog classifier.")
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--fine-tune-epochs", type=int, default=2)
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    train_ds = prepare_dataset(make_dataset("training"), training=True)
+    val_ds = prepare_dataset(make_dataset("validation"))
+
+    model, base_model = build_model()
+
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy",
+            patience=3,
+            restore_best_weights=True,
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss",
+            factor=0.3,
+            patience=2,
+            min_lr=1e-6,
+        ),
+    ]
+
+    compile_model(model, learning_rate=1e-3)
+    first_history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=args.epochs,
+        callbacks=callbacks,
+        verbose=2,
+    )
+
+    best_val_accuracy = max(first_history.history.get("val_accuracy", [0.0]))
+    model.save(MODEL_PATH)
+
+    if args.fine_tune_epochs <= 0:
+        print(f"Model saved to {MODEL_PATH}")
+        print(f"Best validation accuracy: {best_val_accuracy * 100:.2f}%")
+        return
+
+    base_model.trainable = True
+    for layer in base_model.layers[:-30]:
+        layer.trainable = False
+
+    compile_model(model, learning_rate=1e-5)
+    fine_history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=args.fine_tune_epochs,
+        callbacks=callbacks,
+        verbose=2,
+    )
+
+    best_val_accuracy = max(
+        best_val_accuracy,
+        max(fine_history.history.get("val_accuracy", [0.0])),
+    )
+    model.save(MODEL_PATH)
+    print(f"Model saved to {MODEL_PATH}")
+    print(f"Best validation accuracy: {best_val_accuracy * 100:.2f}%")
+
+
+if __name__ == "__main__":
+    main()

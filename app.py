@@ -1,99 +1,119 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, url_for
 import tensorflow as tf
 from PIL import Image
 import numpy as np
 import os
-import uuid
+import time
+from uuid import uuid4
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-# Load AI model
+# Load model
 model = tf.keras.models.load_model("cat_dog_model.h5")
 
-# Upload folder
 UPLOAD_FOLDER = "static/uploads"
+IMAGE_SIZE = (160, 160)
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# Create folder if not exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(
+    UPLOAD_FOLDER,
+    exist_ok=True
+)
 
 # Predict function
+
 def predict_image(path):
 
     img = Image.open(path).convert("RGB")
 
-    img = img.resize((150,150))
+    img = img.resize(IMAGE_SIZE)
 
     img = np.array(img) / 255.0
 
     img = np.expand_dims(img, axis=0)
 
-    prediction = model.predict(img)
+    prediction = model.predict(img, verbose=0)
 
     confidence = float(prediction[0][0])
 
     if confidence > 0.5:
 
-        return "🐶 Dog", confidence * 100
+        result = "Dog"
+
+        confidence = confidence * 100
 
     else:
 
-        return "🐱 Cat", (1 - confidence) * 100
+        result = "Cat"
 
+        confidence = (1 - confidence) * 100
 
-# Home page
+    confidence = round(confidence,2)
+
+    return result, confidence
+
+# Home
+
 @app.route("/")
+
 def home():
 
     return render_template("index.html")
 
+# Predict
 
-# Predict route
-@app.route("/predict", methods=["POST"])
+@app.route(
+    "/predict",
+    methods=["POST"]
+)
+
 def predict():
 
-    if "file" not in request.files:
-
-        return render_template(
-            "index.html",
-            prediction="Không có file!"
-        )
-
     file = request.files["file"]
+    filename = secure_filename(file.filename)
+    if not filename:
+        filename = "upload.jpg"
 
-    if file.filename == "":
-
-        return render_template(
-            "index.html",
-            prediction="Chưa chọn ảnh!"
-        )
-
-    # Random filename
-    filename = str(uuid.uuid4()) + ".jpg"
+    unique_filename = f"{uuid4().hex}_{filename}"
 
     filepath = os.path.join(
         app.config["UPLOAD_FOLDER"],
-        filename
+        unique_filename
     )
 
-    # Save image
     file.save(filepath)
 
-    # Predict
+    # Time prediction
+
+    start = time.time()
+
     result, confidence = predict_image(filepath)
 
-    confidence = round(confidence, 2)
+    end = time.time()
 
-    return render_template(
-        "index.html",
-        prediction=result,
-        confidence=confidence,
-        image_path=filepath
+    predict_time = round(end - start,2)
+
+    image_url = url_for(
+        "static",
+        filename=f"uploads/{unique_filename}",
+        v=int(time.time())
     )
 
+    return render_template(
 
-# Run server
+        "index.html",
+
+        prediction=result,
+
+        confidence=confidence,
+
+        image_path=image_url,
+
+        predict_time=predict_time
+    )
+
 if __name__ == "__main__":
 
-    app.run(debug=True)
+    app.run(debug=False, use_reloader=False)

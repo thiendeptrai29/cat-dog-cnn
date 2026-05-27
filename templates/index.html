@@ -1,69 +1,94 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Cat Dog AI</title>
-
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}"
-    >
-
+    <title>Cat Dog Vision</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
+    <main class="shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <span class="eyebrow">CNN Image Classifier</span>
+                <h1>Cat Dog Vision</h1>
+                <p>Upload một ảnh, model sẽ phân tích và trả về dự đoán mèo hay chó cùng độ tin cậy.</p>
+            </div>
 
-    <div class="container">
+            <div class="model-status" aria-label="Model status">
+                <span class="pulse"></span>
+                Model ready
+            </div>
+        </section>
 
-        <h1>🐱🐶 Nhận diện mèo và chó bằng CNN</h1>
+        <section class="workspace">
+            <form class="upload-panel" action="/predict" method="POST" enctype="multipart/form-data">
+                <label class="dropzone" for="file-input">
+                    <input id="file-input" type="file" name="file" accept="image/*" required>
+                    <span class="upload-icon">+</span>
+                    <span class="upload-title">Chọn ảnh để nhận diện</span>
+                    <span class="upload-meta">JPG, PNG hoặc WEBP</span>
+                    <img id="preview" class="preview" alt="">
+                </label>
 
-        <p>Upload ảnh để AI dự đoán.</p>
+                <button type="submit">
+                    <span>Predict now</span>
+                    <span class="button-arrow">→</span>
+                </button>
+            </form>
 
-        <form
-            action="/predict"
-            method="POST"
-            enctype="multipart/form-data"
-        >
-
-            <input
-                type="file"
-                name="file"
-                required
-            >
-
-            <br>
-
-            <button type="submit">
-                Predict
-            </button>
-
-        </form>
+            <aside class="info-panel">
+                <div class="metric">
+                    <span>Engine</span>
+                    <strong>CNN</strong>
+                </div>
+                <div class="metric">
+                    <span>Input</span>
+                    <strong>160x160</strong>
+                </div>
+                <div class="metric">
+                    <span>Classes</span>
+                    <strong>Cat / Dog</strong>
+                </div>
+            </aside>
+        </section>
 
         {% if prediction %}
+        <section class="result-card">
+            <div class="result-content">
+                <span class="eyebrow">Prediction result</span>
+                <h2>{{ prediction }}</h2>
 
-        <div class="result">
+                <div class="result-grid">
+                    <div>
+                        <span>Confidence</span>
+                        <strong>{{ confidence }}%</strong>
+                    </div>
+                    <div>
+                        <span>Speed</span>
+                        <strong>{{ predict_time }}s</strong>
+                    </div>
+                </div>
+            </div>
 
-            <h2>{{ prediction }}</h2>
-
-            <p class="confidence">
-                Confidence:
-                {{ confidence }}%
-            </p>
-
-            <img
-                src="{{ image_path }}"
-                alt="Uploaded Image"
-            >
-
-        </div>
-
+            <figure class="image-box">
+                <img src="{{ image_path }}" alt="Ảnh đã upload">
+            </figure>
+        </section>
         {% endif %}
+    </main>
 
-    </div>
+    <script>
+        const fileInput = document.querySelector("#file-input");
+        const preview = document.querySelector("#preview");
 
+        fileInput.addEventListener("change", () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            preview.src = URL.createObjectURL(file);
+            preview.classList.add("is-visible");
+        });
+    </script>
 </body>
 </html>
