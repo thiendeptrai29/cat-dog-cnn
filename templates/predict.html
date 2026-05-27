@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Dự đoán ảnh | CatDog CNN{% endblock %}
+{% block content %}
+<section class="predict-page container">
+    <div class="section-heading centered">
+        <div class="eyebrow">CNN Inference Demo</div>
+        <h1>Dự đoán ảnh trong vài giây</h1>
+        <p>Tải ảnh chó hoặc mèo, model CNN sẽ trả nhãn và độ tin cậy trực quan.</p>
+    </div>
+    <div class="predict-grid">
+        <form class="upload-card" action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data">
+            <div class="card-header"><h2>Ảnh đầu vào</h2><span class="file-rule">JPG / PNG / WEBP · tối đa 5 MB</span></div>
+            <div class="paste-badge">Hỗ trợ paste ảnh từ clipboard: Ctrl+V / Cmd+V</div>
+            <label class="dropzone" id="dropzone" for="imageInput">
+                <input id="imageInput" type="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+                <div id="emptyPreview" class="dropzone-copy">
+                    <span class="upload-icon">+</span>
+                    <strong>Kéo thả ảnh vào đây</strong>
+                    <span>hoặc chọn file / nhấn Ctrl+V để dán ảnh</span>
+                </div>
+                <img id="previewImage" class="preview-image hidden" alt="Xem trước ảnh đã chọn">
+            </label>
+            <p id="fileName" class="chosen-file">Chưa chọn ảnh</p>
+            <p id="uploadStatus" class="upload-status" aria-live="polite"></p>
+            <button class="button full-width" type="submit">Phân tích bằng CNN</button>
+        </form>
+        <div class="result-card">
+            {% if result %}
+                <div class="result-badge">Kết quả dự đoán</div>
+                <h2 class="label-result">{{ result.label }}</h2>
+                <p class="score">{{ result.confidence }}<span>%</span></p>
+                <p class="muted">Độ tin cậy của nhãn được chọn</p>
+                <div class="confidence-track" aria-label="Confidence {{ result.confidence }} phần trăm"><span style="width: {{ result.confidence }}%"></span></div>
+                <img class="result-image" src="{{ result.image_url }}" alt="Ảnh vừa phân tích">
+                <p class="timestamp">Thời điểm dự đoán: {{ result.created_at }}</p>
+                <a class="button button-outline retry-button" href="{{ url_for('predict') }}">Thử ảnh khác</a>
+            {% else %}
+                <div class="empty-result">
+                    <div class="network-icon">CNN</div>
+                    <h2>Chưa có kết quả</h2>
+                    <p>Ảnh được resize, chuẩn hóa rồi đưa qua model CNN để dự đoán.</p>
+                    <div class="mini-flow"><span>Image</span><span>&rarr;</span><span>CNN</span><span>&rarr;</span><span>Label</span></div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+    const input = document.getElementById("imageInput");
+    const preview = document.getElementById("previewImage");
+    const emptyPreview = document.getElementById("emptyPreview");
+    const fileName = document.getElementById("fileName");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const dropzone = document.getElementById("dropzone");
+    function showMessage(message, kind) {
+        uploadStatus.textContent = message || "";
+        uploadStatus.className = "upload-status" + (kind ? " is-" + kind : "");
+    }
+    function setSelectedFile(file, source) {
+        if (!file || !file.type.startsWith("image/")) {
+            showMessage("Tệp được chọn không phải ảnh hợp lệ.", "error");
+            return;
+        }
+        if (source !== "picker") {
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            input.files = transfer.files;
+        }
+        preview.src = URL.createObjectURL(file);
+        preview.classList.remove("hidden");
+        emptyPreview.classList.add("hidden");
+        fileName.textContent = source === "clipboard" ? "Ảnh đã dán từ clipboard" : file.name;
+        showMessage("Ảnh đã sẵn sàng để phân tích.", "success");
+    }
+    input.addEventListener("change", function () { if (this.files[0]) setSelectedFile(this.files[0], "picker"); });
+    ["dragenter", "dragover"].forEach(eventName => dropzone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropzone.classList.add("is-dragging");
+    }));
+    ["dragleave", "drop"].forEach(eventName => dropzone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropzone.classList.remove("is-dragging");
+    }));
+    dropzone.addEventListener("drop", event => setSelectedFile(event.dataTransfer.files[0], "drop"));
+    document.addEventListener("paste", event => {
+        const item = Array.from((event.clipboardData && event.clipboardData.items) || []).find(value => value.type.startsWith("image/"));
+        if (!item) return;
+        const blob = item.getAsFile();
+        const extension = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+        setSelectedFile(new File([blob], "clipboard-image." + extension, {type: blob.type}), "clipboard");
+    });
+</script>
+{% endblock %}

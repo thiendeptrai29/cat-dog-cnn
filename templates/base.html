@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="midnight">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CatDog CNN{% endblock %}</title>
+    <script>
+        document.documentElement.dataset.theme = localStorage.getItem("catdog-theme") || "midnight";
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <nav class="nav container">
+            <a class="brand" href="{{ url_for('home') }}">
+                <span class="brand-mark">CNN</span>
+                <span>CatDog CNN</span>
+            </a>
+            <div class="nav-links">
+                <a href="{{ url_for('home') }}">Trang chủ</a>
+                <a href="{{ url_for('predict') }}">Dự đoán ảnh</a>
+                <div class="theme-switcher" aria-label="Chọn giao diện">
+                    <button class="theme-button" type="button" data-theme="midnight" title="Midnight"><span></span><em>Midnight</em></button>
+                    <button class="theme-button" type="button" data-theme="aurora" title="Aurora"><span></span><em>Aurora</em></button>
+                    <button class="theme-button" type="button" data-theme="sunset" title="Sunset"><span></span><em>Sunset</em></button>
+                </div>
+                <a class="button button-small" href="{{ url_for('predict') }}">Thử model</a>
+            </div>
+        </nav>
+        <div class="container flash-stack">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+        </div>
+        <main>{% block content %}{% endblock %}</main>
+        <footer class="footer container">
+            <span>Đồ án phân loại ảnh Cat/Dog bằng CNN</span>
+            <span>Demo upload ảnh, không triển khai realtime</span>
+        </footer>
+    </div>
+    <script>
+        (function () {
+            const themes = ["midnight", "aurora", "sunset"];
+            const buttons = document.querySelectorAll(".theme-button");
+            function applyTheme(theme) {
+                const selected = themes.includes(theme) ? theme : "midnight";
+                document.documentElement.dataset.theme = selected;
+                localStorage.setItem("catdog-theme", selected);
+                buttons.forEach(button => button.classList.toggle("is-active", button.dataset.theme === selected));
+            }
+            buttons.forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.theme)));
+            applyTheme(document.documentElement.dataset.theme);
+        }());
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

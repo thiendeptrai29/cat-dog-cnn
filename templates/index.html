@@ -1,94 +1,44 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Dog Vision</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <main class="shell">
-        <section class="hero">
-            <div class="hero-copy">
-                <span class="eyebrow">CNN Image Classifier</span>
-                <h1>Cat Dog Vision</h1>
-                <p>Upload một ảnh, model sẽ phân tích và trả về dự đoán mèo hay chó cùng độ tin cậy.</p>
+{% extends "base.html" %}
+{% block title %}CatDog CNN | Trang chủ{% endblock %}
+{% block content %}
+<section class="hero container">
+    <div class="hero-copy">
+        <div class="eyebrow">Đề tài CNN phân loại ảnh</div>
+        <h1>Nhận diện <span>mèo</span> và <span>chó</span> bằng CNN</h1>
+        <p class="hero-text">Upload một bức ảnh, mô hình sẽ phân tích đặc trưng hình ảnh và trả về nhãn Cat hoặc Dog cùng độ tin cậy trực quan cho phần demo tiểu luận.</p>
+        <div class="hero-actions">
+            <a class="button" href="{{ url_for('predict') }}">Thử dự đoán ngay</a>
+            <a class="button button-outline" href="#quy-trinh">Xem quy trình</a>
+        </div>
+    </div>
+    <div class="hero-panel">
+        <div class="model-card">
+            <div class="model-header"><span class="status-dot"></span><span>CNN inference đang sẵn sàng</span></div>
+            <div class="pipeline">
+                <div>Ảnh đầu vào<small>160 x 160 RGB</small></div><span>&rarr;</span>
+                <div>Conv + Pool<small>Trích xuất đặc trưng</small></div><span>&rarr;</span>
+                <div>Sigmoid<small>Cat / Dog</small></div>
             </div>
-
-            <div class="model-status" aria-label="Model status">
-                <span class="pulse"></span>
-                Model ready
-            </div>
-        </section>
-
-        <section class="workspace">
-            <form class="upload-panel" action="/predict" method="POST" enctype="multipart/form-data">
-                <label class="dropzone" for="file-input">
-                    <input id="file-input" type="file" name="file" accept="image/*" required>
-                    <span class="upload-icon">+</span>
-                    <span class="upload-title">Chọn ảnh để nhận diện</span>
-                    <span class="upload-meta">JPG, PNG hoặc WEBP</span>
-                    <img id="preview" class="preview" alt="">
-                </label>
-
-                <button type="submit">
-                    <span>Predict now</span>
-                    <span class="button-arrow">→</span>
-                </button>
-            </form>
-
-            <aside class="info-panel">
-                <div class="metric">
-                    <span>Engine</span>
-                    <strong>CNN</strong>
-                </div>
-                <div class="metric">
-                    <span>Input</span>
-                    <strong>160x160</strong>
-                </div>
-                <div class="metric">
-                    <span>Classes</span>
-                    <strong>Cat / Dog</strong>
-                </div>
-            </aside>
-        </section>
-
-        {% if prediction %}
-        <section class="result-card">
-            <div class="result-content">
-                <span class="eyebrow">Prediction result</span>
-                <h2>{{ prediction }}</h2>
-
-                <div class="result-grid">
-                    <div>
-                        <span>Confidence</span>
-                        <strong>{{ confidence }}%</strong>
-                    </div>
-                    <div>
-                        <span>Speed</span>
-                        <strong>{{ predict_time }}s</strong>
-                    </div>
-                </div>
-            </div>
-
-            <figure class="image-box">
-                <img src="{{ image_path }}" alt="Ảnh đã upload">
-            </figure>
-        </section>
-        {% endif %}
-    </main>
-
-    <script>
-        const fileInput = document.querySelector("#file-input");
-        const preview = document.querySelector("#preview");
-
-        fileInput.addEventListener("change", () => {
-            const file = fileInput.files[0];
-            if (!file) return;
-
-            preview.src = URL.createObjectURL(file);
-            preview.classList.add("is-visible");
-        });
-    </script>
-</body>
-</html>
+            <div class="confidence-demo"><span>Trạng thái model</span><strong>Sẵn sàng</strong></div>
+        </div>
+    </div>
+</section>
+<section class="stats container">
+    <article class="stat-card"><strong>{{ dataset_stats.total }}</strong><span>Ảnh hợp lệ trong dataset</span></article>
+    <article class="stat-card"><strong>{{ dataset_stats.cat }}</strong><span>Ảnh mèo</span></article>
+    <article class="stat-card"><strong>{{ dataset_stats.dog }}</strong><span>Ảnh chó</span></article>
+    <article class="stat-card highlighted"><strong>CNN</strong><span>Model phân loại hiện tại</span></article>
+</section>
+<section id="quy-trinh" class="section container">
+    <div class="section-heading">
+        <div class="eyebrow">Luồng dự đoán</div>
+        <h2>Bốn bước đơn giản để nhận diện Cat hoặc Dog</h2>
+    </div>
+    <div class="steps-grid">
+        <article class="step-card"><div class="feature-number">01</div><h3>Upload ảnh</h3><p>Chọn, kéo thả hoặc dán ảnh JPG, PNG, WEBP để bắt đầu thử model.</p></article>
+        <article class="step-card"><div class="feature-number">02</div><h3>Tiền xử lý</h3><p>Ảnh được đổi sang RGB, resize về 160 x 160 và chuẩn hóa pixel.</p></article>
+        <article class="step-card"><div class="feature-number">03</div><h3>CNN phân tích</h3><p>Các lớp của model học đặc trưng để phân biệt chó và mèo.</p></article>
+        <article class="step-card"><div class="feature-number">04</div><h3>Kết quả</h3><p>Website hiển thị nhãn dự đoán và confidence của model.</p></article>
+    </div>
+</section>
+{% endblock %}

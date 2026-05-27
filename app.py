@@ -1,119 +1,105 @@
-from flask import Flask, render_template, request, url_for
-import tensorflow as tf
-from PIL import Image
-import numpy as np
-import os
-import time
+from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
+
+import numpy as np
+import tensorflow as tf
+from flask import Flask, flash, render_template, request, url_for
+from PIL import Image, UnidentifiedImageError
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
 
-# Load model
-model = tf.keras.models.load_model("cat_dog_model.h5")
-
-UPLOAD_FOLDER = "static/uploads"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "cat_dog_model.h5"
+UPLOAD_FOLDER = BASE_DIR / "static" / "uploads"
+DATASET_FOLDER = BASE_DIR / "dataset" / "train"
 IMAGE_SIZE = (160, 160)
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "catdog-cnn-demo"
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
 
-os.makedirs(
-    UPLOAD_FOLDER,
-    exist_ok=True
-)
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
-# Predict function
 
 def predict_image(path):
+    with Image.open(path) as image:
+        image = image.convert("RGB").resize(IMAGE_SIZE)
+        batch = np.expand_dims(np.array(image) / 255.0, axis=0)
 
-    img = Image.open(path).convert("RGB")
+    score = float(model.predict(batch, verbose=0)[0][0])
+    if score > 0.5:
+        return "Dog", round(score * 100, 2)
+    return "Cat", round((1 - score) * 100, 2)
 
-    img = img.resize(IMAGE_SIZE)
 
-    img = np.array(img) / 255.0
+def get_dataset_stats():
+    def image_count(folder):
+        if not folder.exists():
+            return 0
+        return sum(
+            1
+            for path in folder.iterdir()
+            if path.is_file() and path.suffix.lower().lstrip(".") in ALLOWED_EXTENSIONS
+        )
 
-    img = np.expand_dims(img, axis=0)
+    cat_count = image_count(DATASET_FOLDER / "cat")
+    dog_count = image_count(DATASET_FOLDER / "dogs")
+    return {"cat": cat_count, "dog": dog_count, "total": cat_count + dog_count}
 
-    prediction = model.predict(img, verbose=0)
 
-    confidence = float(prediction[0][0])
+def valid_upload(file):
+    extension = Path(file.filename or "").suffix.lower().lstrip(".")
+    return extension in ALLOWED_EXTENSIONS
 
-    if confidence > 0.5:
 
-        result = "Dog"
+@app.errorhandler(413)
+def too_large(_error):
+    flash("Ảnh vượt quá giới hạn 5 MB.", "error")
+    return render_template("predict.html"), 413
 
-        confidence = confidence * 100
-
-    else:
-
-        result = "Cat"
-
-        confidence = (1 - confidence) * 100
-
-    confidence = round(confidence,2)
-
-    return result, confidence
-
-# Home
 
 @app.route("/")
-
 def home():
+    return render_template("index.html", dataset_stats=get_dataset_stats(), evaluation=None)
 
-    return render_template("index.html")
 
-# Predict
-
-@app.route(
-    "/predict",
-    methods=["POST"]
-)
-
+@app.route("/predict", methods=["GET", "POST"])
 def predict():
+    if request.method == "GET":
+        return render_template("predict.html", result=None)
 
-    file = request.files["file"]
-    filename = secure_filename(file.filename)
-    if not filename:
-        filename = "upload.jpg"
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("Vui lòng chọn một ảnh để dự đoán.", "error")
+        return render_template("predict.html", result=None), 400
+    if not valid_upload(file):
+        flash("Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.", "error")
+        return render_template("predict.html", result=None), 400
 
+    filename = secure_filename(file.filename) or "upload.jpg"
     unique_filename = f"{uuid4().hex}_{filename}"
-
-    filepath = os.path.join(
-        app.config["UPLOAD_FOLDER"],
-        unique_filename
-    )
-
+    filepath = UPLOAD_FOLDER / unique_filename
     file.save(filepath)
 
-    # Time prediction
+    try:
+        label, confidence = predict_image(filepath)
+    except (UnidentifiedImageError, OSError):
+        filepath.unlink(missing_ok=True)
+        flash("Tệp đã tải lên không phải ảnh hợp lệ.", "error")
+        return render_template("predict.html", result=None), 400
 
-    start = time.time()
+    result = {
+        "label": label,
+        "confidence": confidence,
+        "image_url": url_for("static", filename=f"uploads/{unique_filename}"),
+        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+    }
+    return render_template("predict.html", result=result)
 
-    result, confidence = predict_image(filepath)
-
-    end = time.time()
-
-    predict_time = round(end - start,2)
-
-    image_url = url_for(
-        "static",
-        filename=f"uploads/{unique_filename}",
-        v=int(time.time())
-    )
-
-    return render_template(
-
-        "index.html",
-
-        prediction=result,
-
-        confidence=confidence,
-
-        image_path=image_url,
-
-        predict_time=predict_time
-    )
 
 if __name__ == "__main__":
-
     app.run(debug=False, use_reloader=False)
