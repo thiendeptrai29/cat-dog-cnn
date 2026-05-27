@@ -1,30 +1,69 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Nhận diện mèo và chó bằng CNN</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Cat Dog AI</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
 </head>
+
 <body>
 
-<div class="container">
-  <h1>🐱🐶 Nhận diện mèo và chó bằng CNN</h1>
+    <div class="container">
 
-  <p>Upload ảnh để AI dự đoán.</p>
+        <h1>🐱🐶 Nhận diện mèo và chó bằng CNN</h1>
 
-  <form action="/predict" method="POST" enctype="multipart/form-data">
-    <input type="file" name="file" required>
-    <button type="submit">Predict</button>
-  </form>
+        <p>Upload ảnh để AI dự đoán.</p>
 
-  {% if prediction %}
-    <div class="result">
-      <h2>{{ prediction }}</h2>
-      <img src="{{ image_path }}" width="300">
+        <form
+            action="/predict"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+            <input
+                type="file"
+                name="file"
+                required
+            >
+
+            <br>
+
+            <button type="submit">
+                Predict
+            </button>
+
+        </form>
+
+        {% if prediction %}
+
+        <div class="result">
+
+            <h2>{{ prediction }}</h2>
+
+            <p class="confidence">
+                Confidence:
+                {{ confidence }}%
+            </p>
+
+            <img
+                src="{{ image_path }}"
+                alt="Uploaded Image"
+            >
+
+        </div>
+
+        {% endif %}
+
     </div>
-  {% endif %}
-
-</div>
 
 </body>
 </html>
